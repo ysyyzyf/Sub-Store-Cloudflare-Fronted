@@ -13,9 +13,28 @@ const BACKEND_URL =
 // Falls back to a public fetch when the binding is absent (local dev).
 const backend = (env as unknown as { BACKEND?: { fetch: typeof fetch } }).BACKEND;
 
-app.get("/__debug", (c) =>
-	c.json({ hasBinding: Boolean(backend), backendUrl: backend ? "(service binding)" : BACKEND_URL }),
-);
+app.get("/__debug", async (c) => {
+	const out: Record<string, unknown> = { hasBinding: Boolean(backend) };
+	if (backend) {
+		for (const u of [
+			"https://backend/health",
+			"https://backend/api/utils/worker-status",
+			"https://backend/api/tokens",
+		]) {
+			try {
+				const r = await backend.fetch(u);
+				out[u] = {
+					status: r.status,
+					contentType: r.headers.get("content-type"),
+					body: (await r.text()).slice(0, 200),
+				};
+			} catch (e) {
+				out[u] = { error: String(e) };
+			}
+		}
+	}
+	return c.json(out);
+});
 
 // Proxy all requests to worker-rs backend
 app.all("/*", async (c) => {
