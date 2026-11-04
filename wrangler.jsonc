@@ -3,5 +3,22 @@
   "compatibility_date": "2026-05-17",
   "services": [
     { "binding": "BACKEND", "service": "sub-store" }
-  ]
+  ],
+  // ...
+  "observability": {
+    "logs": {
+      "enabled": true,
+      "head_sampling_rate": 1,
+      "invocation_logs": true,
+      "persist": true
+    },
+    "traces": {
+      "enabled": false,
+      "head_sampling_rate": 1,
+      "persist": true
+    },
+    "issue_detection": {
+      "enabled": false
+    }
+  }
 }
