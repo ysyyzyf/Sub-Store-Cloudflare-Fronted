@@ -2,11 +2,23 @@ import { getSecret } from "astro:env/server";
 import type { APIRoute } from "astro";
 import { Hono } from "hono";
 import { getTokenFromCookie } from "../../lib/auth";
+import { env } from "cloudflare:workers";
 
 const app = new Hono().basePath("/api");
 
 const BACKEND_URL =
 	getSecret("BACKEND_URL") || "https://sub-store-cloudflare.ichimarugin728.workers.dev";
+// Service binding 到后端 Worker（见 wrangler.jsonc），本地开发没有绑定时回退到公网 fetch
+const backend = (env as unknown as { BACKEND?: { fetch: typeof fetch } }).BACKEND;
+// 3) 构造 URL 和调用 fetch 的地方
+const backendUrl = `${backend ? "https://backend" : BACKEND_URL}${path}${url.search}`;
+// ...
+const doFetch = backend ? backend.fetch.bind(backend) : fetch;
+const response = await doFetch(backendUrl, {
+	method,
+	headers,
+	body: body || undefined,
+});
 
 // Proxy all requests to worker-rs backend
 app.all("/*", async (c) => {
