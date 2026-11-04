@@ -2,6 +2,6 @@
   "name": "sub-store-cloudflare-fronted",
   "compatibility_date": "2026-05-17",
   "services": [
-    { "binding": "BACKEND", "service": "sub-store-cloudflare" }
+    { "binding": "BACKEND", "service": "sub-store" }
   ]
 }
