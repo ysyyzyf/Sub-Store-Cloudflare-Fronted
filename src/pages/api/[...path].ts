@@ -1,24 +1,17 @@
 import { getSecret } from "astro:env/server";
 import type { APIRoute } from "astro";
+import { env } from "cloudflare:workers";
 import { Hono } from "hono";
 import { getTokenFromCookie } from "../../lib/auth";
-import { env } from "cloudflare:workers";
 
 const app = new Hono().basePath("/api");
 
 const BACKEND_URL =
-	getSecret("BACKEND_URL") || "https://sub-store-cloudflare.ichimarugin728.workers.dev";
-// Service binding 到后端 Worker（见 wrangler.jsonc），本地开发没有绑定时回退到公网 fetch
+	getSecret("BACKEND_URL") || "https://sub-store-cloudflare.yeckwill.workers.dev";
+
+// Service binding to the backend Worker (see wrangler.jsonc).
+// Falls back to a public fetch when the binding is absent (local dev).
 const backend = (env as unknown as { BACKEND?: { fetch: typeof fetch } }).BACKEND;
-// 3) 构造 URL 和调用 fetch 的地方
-const backendUrl = `${backend ? "https://backend" : BACKEND_URL}${path}${url.search}`;
-// ...
-const doFetch = backend ? backend.fetch.bind(backend) : fetch;
-const response = await doFetch(backendUrl, {
-	method,
-	headers,
-	body: body || undefined,
-});
 
 // Proxy all requests to worker-rs backend
 app.all("/*", async (c) => {
@@ -31,9 +24,9 @@ app.all("/*", async (c) => {
 	const authHeader = c.req.header("authorization");
 	const token = cookieToken || authHeader?.replace("Bearer ", "");
 
-	// Build backend URL
+	// Build backend URL (the host is ignored when going through a service binding)
 	const url = new URL(c.req.url);
-	const backendUrl = `${BACKEND_URL}${path}${url.search}`;
+	const backendUrl = `${backend ? "https://backend" : BACKEND_URL}${path}${url.search}`;
 
 	// Forward request to backend
 	const headers = new Headers();
@@ -51,7 +44,8 @@ app.all("/*", async (c) => {
 	try {
 		const body = method !== "GET" && method !== "HEAD" ? await c.req.raw.clone().text() : undefined;
 
-		const response = await fetch(backendUrl, {
+		const doFetch = backend ? backend.fetch.bind(backend) : fetch;
+		const response = await doFetch(backendUrl, {
 			method,
 			headers,
 			body: body || undefined,
@@ -71,5 +65,9 @@ app.all("/*", async (c) => {
 });
 
 export const ALL: APIRoute = async (context) => {
-	return app.fetch(context.request);
+	try {
+		return await app.fetch(context.request);
+	} catch (e) {
+		return new Response(String((e as Error)?.stack || e), { status: 500 });
+	}
 };
